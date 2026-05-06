@@ -250,29 +250,28 @@ export default function Editor({ screenshot }) {
 
     const buildExportImage = async () => {
         const overlayData = stageRef.current?.toDataURL({ pixelRatio: 2 });
-        if (!overlayData) return null;
+        if (!overlayData) {
+            window.alert('Annotation layer is not ready yet. Please try again.');
+            return null;
+        }
 
         if (renderMode === 'screenshot') {
             return overlayData;
         }
 
-        const response = await fetch(`/screenshots/${screenshot.id}/snapshot`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-            },
-            body: JSON.stringify({
+        let payload;
+        try {
+            const response = await window.axios.post(`/screenshots/${screenshot.id}/snapshot`, {
                 current_url: addressBar,
                 viewport_width: stageSize.width,
                 viewport_height: stageSize.height,
                 scroll_y: 0,
-            }),
-        });
-
-        if (!response.ok) return null;
-
-        const payload = await response.json();
+            });
+            payload = response.data;
+        } catch {
+            window.alert('Unable to capture live snapshot for export. Please try again.');
+            return null;
+        }
         setSnapshotImageUrl(payload.image_url);
 
         const [baseImg, overlayImg] = await Promise.all([loadImage(payload.image_url), loadImage(overlayData)]);
@@ -351,11 +350,11 @@ export default function Editor({ screenshot }) {
                         <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-9 w-12 rounded" />
                         <input type="range" min="1" max="24" value={strokeWidth} onChange={(e) => setStrokeWidth(Number(e.target.value))} />
                         <input type="range" min="0.1" max="1" step="0.05" value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} />
-                        <button onClick={undo} className="rounded bg-slate-700 px-3 py-1 text-sm text-white">Undo</button>
-                        <button onClick={redo} className="rounded bg-slate-700 px-3 py-1 text-sm text-white">Redo</button>
-                        <button onClick={clearAll} className="rounded bg-rose-600 px-3 py-1 text-sm text-white">Clear</button>
-                        <button onClick={download} className="rounded bg-emerald-600 px-3 py-1 text-sm text-white">Download PNG</button>
-                        <button onClick={save} className="rounded bg-cyan-600 px-3 py-1 text-sm text-white">Save & Share</button>
+                        <button type="button" onClick={undo} className="rounded bg-slate-700 px-3 py-1 text-sm text-white">Undo</button>
+                        <button type="button" onClick={redo} className="rounded bg-slate-700 px-3 py-1 text-sm text-white">Redo</button>
+                        <button type="button" onClick={clearAll} className="rounded bg-rose-600 px-3 py-1 text-sm text-white">Clear</button>
+                        <button type="button" onClick={download} className="rounded bg-emerald-600 px-3 py-1 text-sm text-white">Download PNG</button>
+                        <button type="button" onClick={save} className="rounded bg-cyan-600 px-3 py-1 text-sm text-white">Save & Share</button>
                     </div>
 
                     {renderMode === 'live' ? (
@@ -369,29 +368,27 @@ export default function Editor({ screenshot }) {
                                 style={{ pointerEvents: isAnnotateMode ? 'none' : 'auto' }}
                             />
 
-                            {isAnnotateMode && (
-                                <div className="absolute inset-0 z-20" style={{ pointerEvents: 'auto' }}>
-                                    <Stage
-                                        ref={stageRef}
-                                        width={stageSize.width}
-                                        height={stageSize.height}
-                                        onMouseDown={onDown}
-                                        onMouseMove={onMove}
-                                        onMouseUp={onUp}
-                                        style={{ pointerEvents: 'auto' }}
-                                    >
-                                        <Layer>
-                                            {state.lines.map((line, i) => (
-                                                <Line key={i} points={line.points} stroke={line.color} strokeWidth={line.strokeWidth} opacity={line.opacity} lineCap="round" lineJoin="round" globalCompositeOperation={line.erase ? 'destination-out' : 'source-over'} />
-                                            ))}
-                                            {state.arrows.map((item, i) => <Arrow key={i} points={item.points} stroke={item.color} fill={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} />)}
-                                            {state.rects.map((item, i) => <Rect key={i} x={item.x} y={item.y} width={item.width} height={item.height} stroke={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} fill="transparent" />)}
-                                            {state.ellipses.map((item, i) => <Ellipse key={i} x={item.x} y={item.y} radiusX={item.radiusX} radiusY={item.radiusY} stroke={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} fill="transparent" />)}
-                                            {state.texts.map((item, i) => <Text key={i} {...item} />)}
-                                        </Layer>
-                                    </Stage>
-                                </div>
-                            )}
+                            <div className="absolute inset-0 z-20" style={{ pointerEvents: isAnnotateMode ? 'auto' : 'none' }}>
+                                <Stage
+                                    ref={stageRef}
+                                    width={stageSize.width}
+                                    height={stageSize.height}
+                                    onMouseDown={isAnnotateMode ? onDown : undefined}
+                                    onMouseMove={isAnnotateMode ? onMove : undefined}
+                                    onMouseUp={isAnnotateMode ? onUp : undefined}
+                                    style={{ pointerEvents: isAnnotateMode ? 'auto' : 'none' }}
+                                >
+                                    <Layer>
+                                        {state.lines.map((line, i) => (
+                                            <Line key={i} points={line.points} stroke={line.color} strokeWidth={line.strokeWidth} opacity={line.opacity} lineCap="round" lineJoin="round" globalCompositeOperation={line.erase ? 'destination-out' : 'source-over'} />
+                                        ))}
+                                        {state.arrows.map((item, i) => <Arrow key={i} points={item.points} stroke={item.color} fill={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} />)}
+                                        {state.rects.map((item, i) => <Rect key={i} x={item.x} y={item.y} width={item.width} height={item.height} stroke={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} fill="transparent" />)}
+                                        {state.ellipses.map((item, i) => <Ellipse key={i} x={item.x} y={item.y} radiusX={item.radiusX} radiusY={item.radiusY} stroke={item.color} strokeWidth={item.strokeWidth} opacity={item.opacity} fill="transparent" />)}
+                                        {state.texts.map((item, i) => <Text key={i} {...item} />)}
+                                    </Layer>
+                                </Stage>
+                            </div>
                         </div>
                     ) : (
                         <div className="overflow-auto rounded-xl border bg-white p-3">
