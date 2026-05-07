@@ -11,13 +11,21 @@ class Screenshot extends Model
 
     protected $fillable = [
         'original_url',
+        'current_url',
         'screenshot_path',
         'annotated_path',
         'share_slug',
+        'annotations_json',
+        'viewport_width',
+        'viewport_height',
+        'page_scroll_x',
+        'page_scroll_y',
+        'mode',
         'metadata',
     ];
 
     protected $casts = [
         'metadata' => 'array',
+        'annotations_json' => 'array',
     ];
 }

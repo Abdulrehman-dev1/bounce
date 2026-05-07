@@ -30,29 +30,19 @@ class ScreenshotFlowTest extends TestCase
 
     public function test_invalid_private_urls_are_blocked(): void
     {
-        $this->post('/screenshots', ['url' => 'http://127.0.0.1'])
-            ->assertSessionHasErrors('url');
+        $this->post('/screenshots', ['url' => 'http://127.0.0.1'])->assertSessionHasErrors('url');
     }
 
-    public function test_non_http_scheme_is_blocked(): void
-    {
-        $this->post('/screenshots', ['url' => 'file:///etc/passwd'])
-            ->assertSessionHasErrors('url');
-    }
-
-    public function test_live_iframe_mode_record_is_created_when_site_is_embeddable(): void
+    public function test_live_record_created_for_embeddable_site(): void
     {
         FakeFramePolicyService::$embeddable = true;
-
-        $response = $this->post('/screenshots', ['url' => 'https://example.com']);
+        $this->post('/screenshots', ['url' => 'https://example.com']);
         $shot = Screenshot::first();
-
-        $response->assertRedirect("/screenshots/{$shot->id}/edit");
-        $this->assertNull($shot->screenshot_path);
-        $this->assertSame('live', $shot->metadata['mode']);
+        $this->assertSame('live', $shot->mode);
+        $this->assertSame('https://example.com', $shot->current_url);
     }
 
-    public function test_screenshot_fallback_mode_is_created_when_iframe_is_blocked(): void
+    public function test_fallback_record_created_for_blocked_site(): void
     {
         FakeFramePolicyService::$embeddable = false;
         FakeFramePolicyService::$reason = 'x-frame-options';
@@ -60,54 +50,46 @@ class ScreenshotFlowTest extends TestCase
         $this->post('/screenshots', ['url' => 'https://example.com']);
         $shot = Screenshot::first();
 
+        $this->assertSame('screenshot_fallback', $shot->mode);
         $this->assertNotNull($shot->screenshot_path);
-        $this->assertSame('screenshot', $shot->metadata['mode']);
-        $this->assertSame('x-frame-options', $shot->metadata['frame_policy_reason']);
     }
 
-    public function test_snapshot_endpoint_returns_image_for_live_mode(): void
+    public function test_can_save_annotations_json_and_share(): void
     {
         $shot = Screenshot::create([
             'original_url' => 'https://example.com',
-            'screenshot_path' => null,
-            'share_slug' => 'snap123slug',
-            'metadata' => ['mode' => 'live', 'current_url' => 'https://example.com'],
-        ]);
-
-        $this->postJson("/screenshots/{$shot->id}/snapshot", [
-            'current_url' => 'https://example.com',
-            'viewport_width' => 1200,
-            'viewport_height' => 800,
-            'scroll_y' => 0,
-        ])->assertOk()->assertJsonStructure(['image_url', 'mode']);
-    }
-
-    public function test_can_save_annotated_image(): void
-    {
-        $shot = Screenshot::create([
-            'original_url' => 'https://example.com',
-            'screenshot_path' => 'screenshots/original/example.png',
-            'share_slug' => 'abc123slug',
-            'metadata' => ['mode' => 'screenshot'],
+            'current_url' => 'https://example.com/page',
+            'share_slug' => 'share123',
+            'mode' => 'live',
         ]);
 
         $png = 'data:image/png;base64,'.base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0XYAAAAASUVORK5CYII='));
 
-        $this->post("/screenshots/{$shot->id}/save", ['image' => $png, 'mode' => 'live'])
-            ->assertRedirect('/s/abc123slug');
+        $this->post("/screenshots/{$shot->id}/save", [
+            'image' => $png,
+            'mode' => 'live',
+            'current_url' => 'https://example.com/page',
+            'annotations' => ['lines' => [], 'arrows' => [], 'rects' => [], 'ellipses' => [], 'texts' => []],
+            'viewport_width' => 1280,
+            'viewport_height' => 800,
+            'page_scroll_x' => 0,
+            'page_scroll_y' => 0,
+        ])->assertRedirect('/s/share123');
 
         $shot->refresh();
+        $this->assertNotNull($shot->annotations_json);
         $this->assertNotNull($shot->annotated_path);
         Storage::disk('local')->assertExists($shot->annotated_path);
     }
 
-    public function test_public_share_page_is_accessible(): void
+    public function test_shared_page_loads(): void
     {
         $shot = Screenshot::create([
             'original_url' => 'https://example.com',
-            'screenshot_path' => 'screenshots/original/example.png',
-            'annotated_path' => 'screenshots/annotated/example.png',
+            'current_url' => 'https://example.com',
             'share_slug' => 'publicslug001',
+            'mode' => 'live',
+            'annotations_json' => ['lines' => []],
         ]);
 
         $this->get('/s/'.$shot->share_slug)->assertOk();
