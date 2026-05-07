@@ -28,22 +28,51 @@ app.use((req, res, next) => {
 });
 
 async function ensureBrowser() {
-  if (!browser) browser = await chromium.launch({ headless: true });
+  if (!browser || !browser.isConnected()) {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
+    });
+    browser.on('disconnected', () => {
+      browser = undefined;
+    });
+  }
   return browser;
 }
 
 async function createSession({ url, viewportWidth = 1366, viewportHeight = 900 }) {
   if (sessions.size >= maxSessions) throw new Error('Worker session capacity reached');
 
-  const b = await ensureBrowser();
-  const context = await b.newContext({
-    viewport: { width: Math.max(800, Number(viewportWidth) || 1366), height: Math.max(600, Number(viewportHeight) || 900) },
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  });
-
-  const page = await context.newPage();
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  let context;
+  let page;
+  try {
+    const b = await ensureBrowser();
+    context = await b.newContext({
+      viewport: { width: Math.max(800, Number(viewportWidth) || 1366), height: Math.max(600, Number(viewportHeight) || 900) },
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    });
+    page = await context.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (context) {
+      try { await context.close(); } catch {}
+    }
+    if (message.includes('has been closed') || message.includes('Target page, context or browser')) {
+      browser = undefined;
+      const b2 = await ensureBrowser();
+      context = await b2.newContext({
+        viewport: { width: Math.max(800, Number(viewportWidth) || 1366), height: Math.max(600, Number(viewportHeight) || 900) },
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      });
+      page = await context.newPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    } else {
+      throw error;
+    }
+  }
 
   const id = randomUUID();
   sessions.set(id, {
