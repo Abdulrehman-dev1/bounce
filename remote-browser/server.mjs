@@ -236,6 +236,9 @@ app.get('/sessions/:id/screenshot', async (req, res) => {
     const { page } = getSession(req.params.id);
     const buffer = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: false });
     res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.send(buffer);
   } catch (e) {
     res.status(500).json({ message: e.message || 'Screenshot failed' });

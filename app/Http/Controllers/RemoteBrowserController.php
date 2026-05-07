@@ -70,7 +70,10 @@ class RemoteBrowserController extends Controller
         $contentType = $response->header('Content-Type', 'image/jpeg');
 
         return response($response->body(), $response->status())
-            ->header('Content-Type', $contentType);
+            ->header('Content-Type', $contentType)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function state(string $sessionId): JsonResponse
