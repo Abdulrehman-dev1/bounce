@@ -50,8 +50,7 @@ class ScreenshotFlowTest extends TestCase
         $this->post('/screenshots', ['url' => 'https://example.com']);
         $shot = Screenshot::first();
 
-        $this->assertSame('screenshot_fallback', $shot->mode);
-        $this->assertNotNull($shot->screenshot_path);
+        $this->assertSame('remote_browser', $shot->mode);
     }
 
     public function test_can_save_annotations_json_and_share(): void

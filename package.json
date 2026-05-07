@@ -4,7 +4,9 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "remote-browser": "node remote-browser/server.mjs",
+        "dev:all": "concurrently \"php artisan serve\" \"npm run dev\" \"npm run remote-browser\""
     },
     "devDependencies": {
         "@headlessui/react": "^2.0.0",
@@ -23,9 +25,14 @@
         "vite": "^7.0.7"
     },
     "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^5.1.0",
         "konva": "^9.3.22",
+        "playwright": "^1.54.2",
         "puppeteer": "^24.42.0",
         "react-konva": "^18.2.14",
-        "use-image": "^1.1.4"
+        "use-image": "^1.1.4",
+        "uuid": "^13.0.0",
+        "ws": "^8.20.0"
     }
 }

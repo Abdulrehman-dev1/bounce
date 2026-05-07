@@ -35,7 +35,7 @@ class ScreenshotController extends Controller
 
         $framePolicy = $this->framePolicyService->assess($validated['url']);
 
-        $mode = $framePolicy['embeddable'] ? 'live' : 'screenshot_fallback';
+        $mode = $framePolicy['embeddable'] ? 'live' : 'remote_browser';
         $screenshotPath = null;
 
         if ($mode === 'screenshot_fallback') {
@@ -70,6 +70,10 @@ class ScreenshotController extends Controller
     public function edit(Screenshot $screenshot): Response
     {
         return Inertia::render('Editor', [
+            'remoteBrowser' => [
+                'wsUrl' => (string) config('services.remote_browser.ws_url', env('REMOTE_BROWSER_WS_URL', 'ws://127.0.0.1:3100')),
+                'wsSecret' => (string) config('services.remote_browser.secret', env('REMOTE_BROWSER_SECRET', '')),
+            ],
             'screenshot' => [
                 'id' => $screenshot->id,
                 'original_url' => $screenshot->original_url,
@@ -128,7 +132,7 @@ class ScreenshotController extends Controller
     {
         $validated = $request->validate([
             'image' => ['nullable', 'string', 'regex:/^data:image\/png;base64,/'],
-            'mode' => ['nullable', 'string', 'in:live,screenshot_fallback'],
+            'mode' => ['nullable', 'string', 'in:live,screenshot_fallback,remote_browser'],
             'current_url' => ['required', 'string', new SafePublicUrl],
             'annotations' => ['required', 'array'],
             'viewport_width' => ['required', 'integer', 'min:600', 'max:2400'],
@@ -172,15 +176,21 @@ class ScreenshotController extends Controller
     {
         $screenshot = Screenshot::where('share_slug', $slug)->firstOrFail();
 
-        $isFallback = $screenshot->mode === 'screenshot_fallback' || ! empty($screenshot->metadata['frame_policy_reason']);
+        $isFallback = in_array($screenshot->mode, ['screenshot_fallback', 'remote_browser'], true) || ! empty($screenshot->metadata['frame_policy_reason']);
 
         return Inertia::render('Share', [
+            'remoteBrowser' => [
+                'wsUrl' => (string) config('services.remote_browser.ws_url', env('REMOTE_BROWSER_WS_URL', 'ws://127.0.0.1:3100')),
+                'wsSecret' => (string) config('services.remote_browser.secret', env('REMOTE_BROWSER_SECRET', '')),
+            ],
             'shareUrl' => route('screenshots.share', $slug),
-            'mode' => $isFallback ? 'screenshot_fallback' : 'live',
+            'mode' => $screenshot->mode,
             'message' => $isFallback ? 'This website blocks live embedding, so this share is displayed as a captured screenshot.' : null,
             'currentUrl' => $screenshot->current_url ?? $screenshot->original_url,
+            'slug' => $screenshot->share_slug,
             'viewportWidth' => $screenshot->viewport_width ?? 1280,
             'viewportHeight' => $screenshot->viewport_height ?? 800,
+            'pageScrollY' => $screenshot->page_scroll_y ?? 0,
             'annotations' => $screenshot->annotations_json ?? [],
             'imageUrl' => $screenshot->annotated_path
                 ? route('screenshots.image', [$screenshot->id, 'annotated'])
